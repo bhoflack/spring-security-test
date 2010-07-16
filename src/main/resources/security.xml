@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xmlns:s="http://www.springframework.org/schema/security"
+        xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-2.5.xsd
+       http://www.springframework.org/schema/security http://www.springframework.org/schema/security/spring-security-2.0.xsd">
+
+    <s:http entry-point-ref="casProcessingFilterEntryPoint">
+        <s:intercept-url pattern="/**" access="ROLE_PFUSADMIN" />
+    </s:http>
+
+    <bean name="authenticationManager" class="org.springframework.security.providers.ProviderManager">
+        <property name="providers">
+            <list>
+                <ref local="casAuthenticationProvider"/>
+            </list>
+        </property>
+    </bean>
+
+    <!--CAS specifics-->
+    <!--Send to the cas authentication page.-->
+    <bean id="casProcessingFilterEntryPoint"
+            class="org.springframework.security.ui.cas.CasProcessingFilterEntryPoint">
+            <property name="loginUrl" value="https://itbi.colo.elex.be:8443/cas/login" />
+            <property name="serviceProperties" ref="casServiceProperties" />
+    </bean>
+
+    <bean id="casProcessingFilter" class="org.springframework.security.ui.cas.CasProcessingFilter">
+            <s:custom-filter after="CAS_PROCESSING_FILTER" />
+            <property name="authenticationManager" ref="authenticationManager" />
+            <property name="authenticationFailureUrl" value="/casfailed.jsp" />
+            <property name="defaultTargetUrl" value="/" />
+            <property name="proxyGrantingTicketStorage" ref="proxyGrantingTicketStorage" />
+            <property name="proxyReceptorUrl" value="/secure/receptor" />
+    </bean>    
+
+    <bean id="casAuthenticationProvider"
+                class="org.springframework.security.providers.cas.CasAuthenticationProvider">
+        <s:custom-authentication-provider/>
+        <property name="userDetailsService" ref="delegateUserService"/>
+        <property name="serviceProperties" ref="casServiceProperties"/>
+        <property name="ticketValidator">
+            <bean class="org.jasig.cas.client.validation.Cas20ServiceTicketValidator">
+                <constructor-arg index="0" value="https://itbi.colo.elex.be:8443/cas"/>
+                <property name="proxyGrantingTicketStorage" ref="proxyGrantingTicketStorage"/>
+                <property name="proxyCallbackUrl" value="https://itbi.colo.elex.be:8443/cas/secure/receptor"/>
+            </bean>
+        </property>
+        <property name="key" value="my_secret_id"/>
+    </bean>
+
+    <bean id="delegateUserService" class="com.melexis.DelegateUserDetailsService">
+
+        <constructor-arg>
+            <list>
+                <ref local="staticUserService" />
+                <ref local="ldapUserService" />
+            </list>
+        </constructor-arg>
+    </bean>
+
+    <s:user-service id="staticUserService">
+        <s:user name="pti" password="brhbrh" authorities="ROLE_USER" />
+    </s:user-service>
+
+    <bean id="proxyGrantingTicketStorage" class="org.jasig.cas.client.proxy.ProxyGrantingTicketStorageImpl"/>
+
+    <bean id="casServiceProperties" class="org.springframework.security.ui.cas.ServiceProperties">
+        <property name="service" value="http://10.32.21.4:8080/spring-security-test/j_spring_cas_security_check"/>
+        <property name="sendRenew" value="false"/>
+    </bean>
+
+    <!--LDAP Authorization -->
+    <s:ldap-server id="ldapServer" url="ldap://ldap.colo.elex.be:389/dc=elex"/>
+    <s:ldap-user-service id="ldapUserService"
+                       server-ref="ldapServer" group-search-base="cn=pfusAdmin,ou=J2EE,ou=Applications"
+                       group-role-attribute="cn" group-search-filter="(uniquemember={0})"
+                       user-search-filter="(uid={0})"/>
+</beans>
